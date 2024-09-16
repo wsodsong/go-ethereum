@@ -2,8 +2,6 @@ package vm
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -55,7 +53,7 @@ type CallContextInterceptor interface {
 	StaticCall(env *EVM, me ContractRef, addr common.Address, input []byte, gas uint64) ([]byte, uint64, error)
 }
 
-// -- Interpreter Implementation Registry --
+// -- Interpreter --
 
 // Interpreter defines an interface for different interpreter implementations.
 type Interpreter interface {
@@ -64,28 +62,21 @@ type Interpreter interface {
 	Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error)
 }
 
-type InterpreterFactory func(evm *EVM, cfg Config) Interpreter
+type InterpreterFactory func(evm *EVM) Interpreter
 
-var interpreter_registry = map[string]InterpreterFactory{}
-
-func RegisterInterpreterFactory(name string, factory InterpreterFactory) {
-	interpreter_registry[strings.ToLower(name)] = factory
-}
-
-func NewInterpreter(name string, evm *EVM, cfg Config) Interpreter {
-	factory, found := interpreter_registry[strings.ToLower(name)]
-	if !found {
-		panic(fmt.Sprintf("no factory for interpreter %s registered", name))
+func getInterpreter(evm *EVM) Interpreter {
+	// No Tosca interpreter is supporting tracing yet. Thus, if
+	// there is a tracer, we need to use Geth's EVMInterpreter.
+	config := &evm.Config
+	if config.Tracer != nil {
+		if config.InterpreterForTracing != nil {
+			return config.InterpreterForTracing(evm)
+		}
 	}
-	return factory(evm, cfg)
-}
-
-func init() {
-	factory := func(evm *EVM, cfg Config) Interpreter {
-		return NewEVMInterpreter(evm)
+	if config.Interpreter != nil {
+		return config.Interpreter(evm)
 	}
-	RegisterInterpreterFactory("", factory)
-	RegisterInterpreterFactory("geth", factory)
+	return NewEVMInterpreter(evm)
 }
 
 // --- Abstracted interpreter with step execution ---
