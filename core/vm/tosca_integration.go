@@ -116,6 +116,9 @@ func (in *EVMInterpreter) Step(state *InterpreterState) {
 		state.ReturnData = res
 	} else if err != nil {
 		state.Status = Failed
+	} else if len(state.Contract.Code) == 0 {
+		// No contract code is treated as a stop, to avoid infinite loops
+		state.Status = Stopped
 	} else {
 		state.Status = Running
 	}
